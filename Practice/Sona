@@ -1,0 +1,30 @@
+nmap -sV IP
+
+23/tcp   open  telnet?
+8081/tcp open  http    Jetty 9.4.18.v20190429    -> Nexus application
+
+Nexus est un gestionnaire de dépôts d’artifacts pour la CI/CD.
+Il sert de registre privé et de proxy cache pour les écosystèmes de packages (Maven, npm, PyPI, NuGet, Docker, yum/apt, etc.).
+Il centralise la publication interne (hosted), met en cache les dépôts publics (proxy) et agrège le tout via des “group repositories” pour simplifier la configuration côté développeurs ou pipelines.
+L’intérêt est double: performance/stabilité des builds et contrôle/traçabilité des dépendances.
+
+http://192.168.69.159:8081/#login
+Your admin user password is located in
+/home/nexus/sonatype-work/nexus3/admin.password on the server.
+
+ dirsearch -u http://192.168.69.159:8081
+
+[14:28:24] Starting:                                                                                                                                                                                                                        
+[14:28:31] 500 -    2KB - /\..\..\..\..\..\..\..\..\..\etc\passwd           
+[14:28:50] 404 -    2KB - /error.html                                       
+[14:28:50] 200 -    4KB - /favicon.ico                                      
+[14:28:54] 302 -    0B  - /index.html  ->  http://192.168.69.159:8081       
+[14:29:03] 200 -   66B  - /robots.txt  
+
+http://192.168.69.159:8081/robots.txt
+User-agent: *
+Disallow: /repository/
+Disallow: /service/
+Allow: /
+
+gobuster dir -u http://192.168.69.159:8081/ -w /usr/share/seclists….
