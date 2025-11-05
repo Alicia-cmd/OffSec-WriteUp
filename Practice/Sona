@@ -27,4 +27,35 @@ Disallow: /repository/
 Disallow: /service/
 Allow: /
 
-gobuster dir -u http://192.168.69.159:8081/ -w /usr/share/seclists….
+On tente une connexion telnet 
+
+???(root?kali)-[/home/kali]
+??# telnet 192.168.60.159
+Trying 192.168.60.159...
+Connected to 192.168.60.159.
+Escape character is '^]'.
+====================
+NEXUS BACKUP MANAGER
+====================
+ANSONE  Answer question one
+ANSTWO  Answer question two
+BACKUP  Perform backup
+EXIT    Exit
+HELP    Show help
+HINT    Show hints
+RECOVER Recover admin password
+RESTORE Restore backup
+Connection closed by foreign host.
+
+Cela me demande une question 1 et question 2
+
+telnet IP 23
+écrire 
+HINT  (HINT, c’est l’option “indices” du menu Telnet)
+On voit les 2 questions
+1.What is your zodiac sign?
+2.What is your favorite color?
+
+
+
+
