@@ -238,6 +238,10 @@ exus@sona:/tmp$ chmod +x linpeas.sh
 chmod +x linpeas.sh
 ./linpeas.sh
 
+
+
+
+
 Nous savons de plus,
 "Your admin user password is located in
 /home/nexus/sonatype-work/nexus3/admin.password on the server."
