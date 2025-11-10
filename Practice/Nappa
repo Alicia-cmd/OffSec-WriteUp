@@ -1,0 +1,34 @@
+nmap -sV 192.168.70.114
+
+21/tcp   open  ftp        vsftpd 3.0.3
+3306/tcp open  mysql      MariaDB 10.3.24 or later (unauthorized)
+8080/tcp open  http-proxy 
+
+
+192.168.70.114:8080
+Site web ForumOnRails de manga, avec une page login et register
+
+On va chercker les fichiers ou page caché
+
+dirsearch -u http://192.168.70.114:8080  -> la commande tourne trop longtemps
+
+apt install seclists
+
+ffuf -u http://192.168.70.114:8080/FUZZ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-medium.txt -mc 200,204,301,302,307,401,403 -fc 404 -t 50
+
+gobuster dir -u http://192.168.70.114:8080/ -w /usr/share/seclists/Discovery/Web-Content/directory-list-2.3-small.txt
+
+login                   [Status: 200, Size: 3295, Words: 520, Lines: 89, Duration: 39ms]
+register                [Status: 200, Size: 3635, Words: 562, Lines: 99, Duration: 131ms]
+edit                    [Status: 302, Size: 98, Words: 5, Lines: 1, Duration: 17ms]
+questions               [Status: 302, Size: 98, Words: 5, Lines: 1, Duration: 37ms]
+404                     [Status: 200, Size: 1722, Words: 310, Lines: 68, Duration: 12ms]
+500                     [Status: 200, Size: 1635, Words: 289, Lines: 67, Duration: 63ms]
+422                     [Status: 200, Size: 1705, Words: 305, Lines: 68, Duration: 77ms]
+
+création du compte alicia test@gmail.com pwd alicia
+En se créant un compte, on a acces articles que l'on peut modifier , lorsque l'on modifie, cela sauvegarde notre changement en base.. tentative d'exploitation de la base qui est en MariaDB 10.3.24 or later.. 
+recherche : 
+exploit mysql MariaDB 10.3.24 injection commentaire forum RCE
+ou alors,
+j'envoie mon bash -c mais pour mysql 
