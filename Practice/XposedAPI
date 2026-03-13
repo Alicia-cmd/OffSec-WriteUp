@@ -155,3 +155,6 @@ Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/w
 Accept-Encoding: gzip, deflate, br
 Connection: keep-alive
 Content-Length: 2
+
+
+Faire un restart de l'application en curl + webapp browser
