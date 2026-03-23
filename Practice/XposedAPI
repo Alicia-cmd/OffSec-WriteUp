@@ -152,3 +152,8 @@ sur ma kali
 
 (root?kali)-[/home/kali]
 ??# git clone https://github.com/BRU1S3R/linpeas.sh.git
+
+utiliser un wget pour réécrire le /etc/passwd et créer mon root2 sur ma kali , écraser le /etc/passwd de la machine distante.
+su root2,
+entrer le mot de passe,
+puis root et flag
